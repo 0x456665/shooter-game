@@ -33,7 +33,7 @@ fn main() {
         .add_systems(Update, (move_player, move_enemy))
         .add_systems(Update, (player_shoot, cleanup_bullets, enemy_shoot))
         .add_systems(Update, (move_bullet, move_enemy_bullet))
-        .add_systems(Update, spawn_enemy)
+        .add_systems(Update, (spawn_enemy, cleanup_enemy))
         .run();
 }
 

@@ -73,13 +73,14 @@ pub fn move_player(
 pub fn player_shoot(
     mut commands: Commands,
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    mouse_input: Res<ButtonInput<MouseButton>>,
     player_query: Query<&Transform, With<Player>>,
     asset_server: Res<AssetServer>,
     time: Res<Time>,
     mut bullet_timer: ResMut<BulletTimer>,
 ) {
     if bullet_timer.0.tick(time.delta()).just_finished() {
-        if keyboard_input.pressed(KeyCode::Space) {
+        if keyboard_input.pressed(KeyCode::Space) || mouse_input.pressed(MouseButton::Left) {
             if let Ok(player_transform) = player_query.single() {
                 // Spawn bullet at player position
                 commands.spawn((
@@ -95,6 +96,8 @@ pub fn player_shoot(
                     PlayerBullet,
                     Velocity(Vec2::new(0.0, BULLET_SPEED)),
                 ));
+
+                commands.spawn(AudioPlayer::new(asset_server.load("Bonus/sfx_laser1.ogg")));
             }
         }
     }
