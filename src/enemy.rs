@@ -1,5 +1,6 @@
-use crate::{constant::*, player::Velocity};
+use crate::constant::*;
 use bevy::{prelude::*, sprite::Anchor};
+use bevy_rapier2d::prelude::*;
 use rand::{Rng, seq::SliceRandom};
 
 #[derive(Component)]
@@ -35,6 +36,15 @@ pub fn spawn_enemy(
             };
 
             commands.spawn((
+                RigidBody::Dynamic,
+                GravityScale(0.0),
+                Velocity {
+                    linvel: Vec2::new(0.0, -PLAYER_SPEED * 0.8),
+                    angvel: 0.0,
+                },
+                ActiveEvents::COLLISION_EVENTS,
+                Sensor,
+                Collider::cuboid(ENEMY_SIZE.x / 2.0, ENEMY_SIZE.y / 2.0),
                 Transform::from_xyz(x, WINDOW_HEIGHT / 2.0, 0.0),
                 Sprite {
                     image: asset_server.load("PNG/Enemies/enemyRed1.png"),
@@ -48,17 +58,17 @@ pub fn spawn_enemy(
     }
 }
 
-pub fn move_enemy(mut query: Query<&mut Transform, With<Enemy>>) {
-    for mut enemy in query.iter_mut() {
-        enemy.translation.y -= 2.0
-    }
-}
+// pub fn move_enemy(mut query: Query<&mut Transform, With<Enemy>>, time: Res<Time>) {
+//     for mut enemy in query.iter_mut() {
+//         enemy.translation.y -= PLAYER_SPEED * 0.8 * time.delta_secs();
+//     }
+// }
 
 pub fn cleanup_enemy(
     mut commands: Commands,
-    bullet_query: Query<(Entity, &Transform), (With<Enemy>, With<Sprite>)>,
+    enemy_query: Query<(Entity, &Transform), With<Enemy>>,
 ) {
-    for (entity, transform) in bullet_query.iter() {
+    for (entity, transform) in enemy_query.iter() {
         // Remove bullets that have gone off-screen
         if transform.translation.y > WINDOW_HEIGHT / 2.0 + 50.0 {
             commands.entity(entity).despawn();
@@ -92,6 +102,12 @@ pub fn enemy_shoot(
                 let enemy_transform = enemies[indices[i]];
 
                 commands.spawn((
+                    RigidBody::Dynamic,
+                    Collider::cuboid(BULLET_SIZE.x / 2.0, BULLET_SIZE.y / 2.0),
+                    Velocity {
+                        linvel: Vec2::new(0.0, -BULLET_SPEED * 0.6),
+                        angvel: 0.0,
+                    },
                     Transform::from_translation(
                         enemy_transform.translation + Vec3::new(0.0, -ENEMY_SIZE.y / 2.0, 0.0),
                     ),
@@ -101,11 +117,10 @@ pub fn enemy_shoot(
                         anchor: Anchor::Center,
                         ..default()
                     },
+                    GravityScale(0.0),
                     EnemyBullet,
-                    Velocity(Vec2::new(0.0, BULLET_SPEED * 0.7)), // Slower enemy bullets
                 ));
             }
-
             // Play one sound effect per shooting round, not per bullet
             if num_shooters > 0 {
                 commands.spawn(AudioPlayer::new(asset_server.load("Bonus/sfx_laser2.ogg")));
@@ -114,11 +129,11 @@ pub fn enemy_shoot(
     }
 }
 
-pub fn move_enemy_bullet(
-    time: Res<Time>,
-    mut query: Query<(&mut Transform, &Velocity), With<EnemyBullet>>,
-) {
-    for (mut transform, velocity) in query.iter_mut() {
-        transform.translation.y -= velocity.0.y * time.delta_secs();
-    }
-}
+// pub fn move_enemy_bullet(
+//     time: Res<Time>,
+//     mut query: Query<(&mut Transform, &Velocity), With<EnemyBullet>>,
+// ) {
+//     for (mut transform, velocity) in query.iter_mut() {
+//         transform.translation.y -= velocity.0.y * time.delta_secs();
+//     }
+// }

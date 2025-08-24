@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 use bevy::window::{PresentMode, WindowResolution};
+use bevy_rapier2d::prelude::*;
+use first_bevy_game::collision::*;
 use first_bevy_game::{constant::*, enemy::*, player::*};
 
 fn main() {
@@ -28,12 +30,15 @@ fn main() {
             0.5,
             TimerMode::Repeating,
         )))
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
+        .add_plugins(RapierDebugRenderPlugin::default())
         .add_systems(Startup, add_background)
         .add_systems(Startup, (initialize_camera, spawn_player))
-        .add_systems(Update, (move_player, move_enemy))
+        .add_systems(Update, move_player)
         .add_systems(Update, (player_shoot, cleanup_bullets, enemy_shoot))
-        .add_systems(Update, (move_bullet, move_enemy_bullet))
+        // .add_systems(Update, (move_bullet, move_enemy_bullet))
         .add_systems(Update, (spawn_enemy, cleanup_enemy))
+        .add_systems(Update, handle_collisions)
         .run();
 }
 
@@ -47,7 +52,7 @@ fn initialize_camera(mut commands: Commands) {
 
 fn add_background(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Sprite {
-        image: asset_server.load("Backgrounds/black.png"),
+        image: asset_server.load("Backgrounds/darkPurple.png"),
         custom_size: Some(Vec2::new(WINDOW_WIDTH, WINDOW_HEIGHT)),
         ..default()
     });

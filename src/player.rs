@@ -1,7 +1,7 @@
-use crate::enemy::EnemyBullet;
-
 use super::constant::*;
+use crate::enemy::EnemyBullet;
 use bevy::{prelude::*, sprite::Anchor};
+use bevy_rapier2d::prelude::*;
 
 #[derive(Component)]
 pub struct Player;
@@ -12,18 +12,22 @@ pub struct BulletTimer(pub Timer);
 #[derive(Component)]
 pub struct PlayerBullet;
 
-#[derive(Component)]
-pub struct Velocity(pub Vec2);
+// #[derive(Component)]
+// pub struct Velocity(pub Vec2);
 
 pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
-        Transform::from_xyz(0.0, -WINDOW_HEIGHT / 2.0 + 100.0, 0.0), // Start near bottom
+        RigidBody::KinematicPositionBased, // Better for manual movement
+        ActiveEvents::COLLISION_EVENTS,
+        Collider::cuboid(PLAYER_SIZE.x / 2.0, PLAYER_SIZE.y / 2.0),
+        Transform::from_xyz(0.0, -WINDOW_HEIGHT / 2.0 + 100.0, 0.0),
         Sprite {
             image: asset_server.load("PNG/playerShip3_blue.png"),
             custom_size: Some(PLAYER_SIZE),
-            anchor: Anchor::Center, // Center anchor is usually better for games
+            anchor: Anchor::Center,
             ..default()
         },
+        Sensor,
         Player,
     ));
 }
@@ -84,17 +88,24 @@ pub fn player_shoot(
             if let Ok(player_transform) = player_query.single() {
                 // Spawn bullet at player position
                 commands.spawn((
+                    RigidBody::KinematicVelocityBased, 
+                    Collider::cuboid(BULLET_SIZE.x / 2.0, BULLET_SIZE.y / 2.0),
                     Transform::from_translation(
                         player_transform.translation + Vec3::new(0.0, PLAYER_SIZE.y / 2.0, 0.0),
                     ),
+                    Velocity {
+                        linvel: Vec2::new(0.0, BULLET_SPEED),
+                        angvel: 0.0,
+                    },
                     Sprite {
                         image: asset_server.load("PNG/Lasers/laserBlue01.png"),
                         custom_size: Some(BULLET_SIZE),
                         anchor: Anchor::Center,
                         ..default()
                     },
+                    Sensor,
                     PlayerBullet,
-                    Velocity(Vec2::new(0.0, BULLET_SPEED)),
+                    ActiveEvents::COLLISION_EVENTS,
                 ));
 
                 commands.spawn(AudioPlayer::new(asset_server.load("Bonus/sfx_laser1.ogg")));
@@ -103,24 +114,29 @@ pub fn player_shoot(
     }
 }
 
-pub fn move_bullet(
-    time: Res<Time>,
-    mut query: Query<(&mut Transform, &Velocity), With<PlayerBullet>>,
-) {
-    for (mut transform, velocity) in query.iter_mut() {
-        transform.translation.y += velocity.0.y * time.delta_secs();
-    }
-}
+// pub fn move_bullet(
+//     time: Res<Time>,
+//     mut query: Query<(&mut Transform, &Velocity), With<PlayerBullet>>,
+// ) {
+//     for (mut transform, velocity) in query.iter_mut() {
+//         transform.translation.y += velocity.0.y * time.delta_secs();
+//     }
+// }
 
 pub fn cleanup_bullets(
     mut commands: Commands,
-    bullet_query: Query<(Entity, &Transform), (With<PlayerBullet>, With<EnemyBullet>)>,
+    player_bullet_query: Query<(Entity, &Transform), With<PlayerBullet>>,
+    enemy_bullet_query: Query<(Entity, &Transform), With<EnemyBullet>>,
 ) {
-    for (entity, transform) in bullet_query.iter() {
-        // Remove bullets that have gone off-screen
+    // Clean up player bullets
+    for (entity, transform) in player_bullet_query.iter() {
         if transform.translation.y > WINDOW_HEIGHT / 2.0 + 50.0 {
             commands.entity(entity).despawn();
         }
+    }
+
+    // Clean up enemy bullets
+    for (entity, transform) in enemy_bullet_query.iter() {
         if transform.translation.y < -WINDOW_HEIGHT / 2.0 - 50.0 {
             commands.entity(entity).despawn();
         }

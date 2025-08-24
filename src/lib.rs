@@ -1,7 +1,7 @@
 pub mod constant;
 pub mod enemy;
 pub mod player;
-
+pub mod collision;
 // use bevy::window::{PresentMode, WindowResolution};
 // use bevy::{prelude::*, sprite::Anchor};
 
