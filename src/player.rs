@@ -1,7 +1,8 @@
 use super::constant::*;
 use crate::enemy::EnemyBullet;
-use bevy::{prelude::*, sprite::Anchor};
+use bevy::{asset::LoadedFolder, prelude::*, sprite::Anchor};
 use bevy_rapier2d::prelude::*;
+use rand::Rng;
 
 #[derive(Component)]
 pub struct Player;
@@ -12,24 +13,45 @@ pub struct BulletTimer(pub Timer);
 #[derive(Component)]
 pub struct PlayerBullet;
 
-// #[derive(Component)]
-// pub struct Velocity(pub Vec2);
+#[derive(Resource, Default)]
+pub struct PlayerSpawned(pub bool);
 
-pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn((
-        RigidBody::KinematicPositionBased, // Better for manual movement
-        ActiveEvents::COLLISION_EVENTS,
-        Collider::cuboid(PLAYER_SIZE.x / 2.0, PLAYER_SIZE.y / 2.0),
-        Transform::from_xyz(0.0, -WINDOW_HEIGHT / 2.0 + 100.0, 0.0),
-        Sprite {
-            image: asset_server.load("PNG/playerShip3_blue.png"),
-            custom_size: Some(PLAYER_SIZE),
-            anchor: Anchor::Center,
-            ..default()
-        },
-        Sensor,
-        Player,
-    ));
+pub fn spawn_player(
+    mut commands: Commands,
+    game_assets: Res<GameAssets>,
+    mut player_spawned: ResMut<PlayerSpawned>,
+    existing_players: Query<&Player>,
+    loaded_folder: Res<Assets<LoadedFolder>>,
+) {
+    if player_spawned.0 || !existing_players.is_empty() {
+        return;
+    }
+
+    if let Some(player_folder) = loaded_folder.get(&game_assets.player_folder) {
+
+        if player_folder.handles.is_empty() {
+            return;
+        }
+        let mut rng = rand::rng();
+        let random_index = rng.random_range(0..player_folder.handles.len());
+        commands.spawn((
+            RigidBody::KinematicPositionBased, // Better for manual movement
+            ActiveEvents::COLLISION_EVENTS,
+            Collider::cuboid(PLAYER_SIZE.x / 2.0, PLAYER_SIZE.y / 2.0),
+            Transform::from_xyz(0.0, -WINDOW_HEIGHT / 2.0 + 100.0, 0.0),
+            Sprite {
+                image: player_folder.handles[random_index].clone().typed(),
+                custom_size: Some(PLAYER_SIZE),
+                anchor: Anchor::Center,
+                ..default()
+            },
+            Sensor,
+            Player,
+        ));
+        player_spawned.0 = true;
+    } else {
+        println!("Player folder not yet loaded, waiting...");
+    }
 }
 
 pub fn move_player(
@@ -88,7 +110,7 @@ pub fn player_shoot(
             if let Ok(player_transform) = player_query.single() {
                 // Spawn bullet at player position
                 commands.spawn((
-                    RigidBody::KinematicVelocityBased, 
+                    RigidBody::KinematicVelocityBased,
                     Collider::cuboid(BULLET_SIZE.x / 2.0, BULLET_SIZE.y / 2.0),
                     Transform::from_translation(
                         player_transform.translation + Vec3::new(0.0, PLAYER_SIZE.y / 2.0, 0.0),
@@ -104,6 +126,7 @@ pub fn player_shoot(
                         ..default()
                     },
                     Sensor,
+                    Bullet,
                     PlayerBullet,
                     ActiveEvents::COLLISION_EVENTS,
                 ));
@@ -113,15 +136,6 @@ pub fn player_shoot(
         }
     }
 }
-
-// pub fn move_bullet(
-//     time: Res<Time>,
-//     mut query: Query<(&mut Transform, &Velocity), With<PlayerBullet>>,
-// ) {
-//     for (mut transform, velocity) in query.iter_mut() {
-//         transform.translation.y += velocity.0.y * time.delta_secs();
-//     }
-// }
 
 pub fn cleanup_bullets(
     mut commands: Commands,
