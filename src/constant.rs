@@ -12,7 +12,6 @@ pub const MAX_ENEMY: u8 = 4;
 pub const MIN_ENEMY: u8 = 1;
 pub const ENEMY_SIZE: Vec2 = Vec2::new(40.0, 40.0);
 
-
 #[derive(Resource, Default)]
 pub struct GameAssets {
     pub enemy_folder: Handle<LoadedFolder>,
@@ -22,3 +21,9 @@ pub struct GameAssets {
 
 #[derive(Component)]
 pub struct Bullet;
+
+#[derive(Resource)]
+pub struct GameValues {
+    pub score: u16,
+    pub health: u8,
+}

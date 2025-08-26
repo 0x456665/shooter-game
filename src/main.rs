@@ -3,7 +3,7 @@ use bevy::window::{PresentMode, WindowResolution};
 use bevy_rapier2d::prelude::*;
 use first_bevy_game::collision::*;
 use first_bevy_game::debris::*;
-use first_bevy_game::{constant::*, enemy::*, player::*};
+use first_bevy_game::{constant::*, enemy::*, player::*, state::*};
 
 fn main() {
     App::new()
@@ -22,6 +22,9 @@ fn main() {
                 ..default()
             }),
         )
+        .add_plugins(GameStatePlugin)
+        .init_state::<GameState>()
+        .insert_resource(GameValues{score: 0, health: 10})
         .insert_resource(ClearColor(Color::srgb_u8(0, 0, 0)))
         .insert_resource(PlayerSpawned::default()) // Black background
         .insert_resource(BulletTimer(Timer::from_seconds(0.1, TimerMode::Repeating)))
@@ -38,11 +41,7 @@ fn main() {
         // .add_plugins(RapierDebugRenderPlugin::default())
         .add_systems(
             Startup,
-            (
-                load_assets_once,
-                add_background,
-                initialize_camera,
-            ),
+            (load_assets_once, add_background, initialize_camera),
         )
         .add_systems(
             Update,
@@ -58,7 +57,8 @@ fn main() {
                 handle_collisions,
                 spawn_debris,
                 cleanup_debris,
-            ),
+            )
+                .run_if(in_state(GameState::Playing)),
         )
         // .add_systems(Update, (move_bullet, move_enemy_bullet))
         .run();

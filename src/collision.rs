@@ -1,15 +1,12 @@
-use std::sync::Mutex;
-
 use crate::{
+    constant::GameValues,
     debris::Debris,
     enemy::{Enemy, EnemyBullet},
     player::{Player, PlayerBullet},
+    state::GameState,
 };
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
-
-static PLAYER_HEALTH: Mutex<u8> = Mutex::new(5);
-static SCORE: Mutex<u16> = Mutex::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum EntityType {
@@ -67,7 +64,6 @@ pub fn display_events(
     }
 }
 
-
 fn get_entity_type(
     entity: Entity,
     player_query: &Query<Entity, With<Player>>,
@@ -99,32 +95,62 @@ fn handle_collision_and_despawn(
     commands: &mut Commands,
     asset_server: &ResMut<AssetServer>,
     despawned_entities: &mut std::collections::HashSet<Entity>,
+    game_values: &mut ResMut<GameValues>,
+    mut next_state: &mut ResMut<NextState<GameState>>,
 ) -> bool {
     use EntityType::*;
-    
+
     match (type1, type2) {
         // Player vs Enemy (either order)
         (Player, Enemy) | (Enemy, Player) => {
-            let (player, enemy) = if type1 == Player { (entity1, entity2) } else { (entity2, entity1) };
+            let (player, enemy) = if type1 == Player {
+                (entity1, entity2)
+            } else {
+                (entity2, entity1)
+            };
             println!("Player collided with enemy!");
-            handle_player_damage(commands, asset_server, player, despawned_entities);
+            handle_player_damage(
+                commands,
+                asset_server,
+                player,
+                despawned_entities,
+                game_values,
+                &mut next_state,
+            );
             despawn_entity(commands, enemy, despawned_entities);
             true
         }
 
         // Player vs Enemy Bullet (either order)
         (Player, EnemyBullet) | (EnemyBullet, Player) => {
-            let (player, bullet) = if type1 == Player { (entity1, entity2) } else { (entity2, entity1) };
+            let (player, bullet) = if type1 == Player {
+                (entity1, entity2)
+            } else {
+                (entity2, entity1)
+            };
             println!("Player hit by enemy bullet!");
-            handle_player_damage(commands, asset_server, player, despawned_entities);
+            handle_player_damage(
+                commands,
+                asset_server,
+                player,
+                despawned_entities,
+                game_values,
+                &mut next_state,
+            );
             despawn_entity(commands, bullet, despawned_entities);
             true
         }
 
         // Any Bullet vs Debris (either order)
-        (PlayerBullet, Debris) | (Debris, PlayerBullet) |
-        (EnemyBullet, Debris) | (Debris, EnemyBullet) => {
-            let bullet = if matches!(type1, PlayerBullet | EnemyBullet) { entity1 } else { entity2 };
+        (PlayerBullet, Debris)
+        | (Debris, PlayerBullet)
+        | (EnemyBullet, Debris)
+        | (Debris, EnemyBullet) => {
+            let bullet = if matches!(type1, PlayerBullet | EnemyBullet) {
+                entity1
+            } else {
+                entity2
+            };
             println!("Bullet hit debris!");
             despawn_entity(commands, bullet, despawned_entities);
             true
@@ -132,12 +158,16 @@ fn handle_collision_and_despawn(
 
         // Player Bullet vs Enemy (either order)
         (PlayerBullet, Enemy) | (Enemy, PlayerBullet) => {
-            let (bullet, enemy) = if type1 == PlayerBullet { (entity1, entity2) } else { (entity2, entity1) };
+            let (bullet, enemy) = if type1 == PlayerBullet {
+                (entity1, entity2)
+            } else {
+                (entity2, entity1)
+            };
             println!("Player bullet hit enemy!");
             despawn_entity(commands, enemy, despawned_entities);
             despawn_entity(commands, bullet, despawned_entities);
             commands.spawn(AudioPlayer::new(asset_server.load("Bonus/sfx_zap.ogg")));
-            *SCORE.lock().unwrap() += 1;
+            game_values.score += 5;
             true
         }
 
@@ -159,14 +189,18 @@ fn handle_player_damage(
     asset_server: &ResMut<AssetServer>,
     player: Entity,
     despawned_entities: &mut std::collections::HashSet<Entity>,
+    game_values: &mut ResMut<GameValues>,
+    next_state: &mut ResMut<NextState<GameState>>,
 ) {
-    let mut health = PLAYER_HEALTH.lock().unwrap();
-    if *health <= 1 {
-        *health = 0;
+    if game_values.health <= 1 {
+        game_values.health = 0;
         commands.spawn(AudioPlayer::new(asset_server.load("Bonus/sfx_lose.ogg")));
+        println!("Player died! Setting state to GameOver");
+        next_state.set(GameState::GameOver);
         despawn_entity(commands, player, despawned_entities);
+        println!("State change queued, player despawned");
     } else {
-        *health -= 1;
+        game_values.health -= 1;
         commands.spawn(AudioPlayer::new(asset_server.load("Bonus/sfx_zap.ogg")));
     }
 }
@@ -191,7 +225,14 @@ pub fn handle_collisions(
     enemy_query: Query<Entity, With<Enemy>>,
     player_bullet_query: Query<Entity, With<PlayerBullet>>,
     enemy_bullet_query: Query<Entity, With<EnemyBullet>>,
+    mut game_values: ResMut<GameValues>,
+    mut next_state: ResMut<NextState<GameState>>,
+    current_state: Res<State<GameState>>,
 ) {
+    if *current_state.get() != GameState::Playing {
+        return;
+    }
+
     let mut despawned_entities = std::collections::HashSet::new();
 
     for collision_event in collision_events.read() {
@@ -201,8 +242,22 @@ pub fn handle_collisions(
                 continue;
             }
 
-            let type1 = get_entity_type(*entity1, &player_query, &enemy_query, &player_bullet_query, &enemy_bullet_query, &debris_query);
-            let type2 = get_entity_type(*entity2, &player_query, &enemy_query, &player_bullet_query, &enemy_bullet_query, &debris_query);
+            let type1 = get_entity_type(
+                *entity1,
+                &player_query,
+                &enemy_query,
+                &player_bullet_query,
+                &enemy_bullet_query,
+                &debris_query,
+            );
+            let type2 = get_entity_type(
+                *entity2,
+                &player_query,
+                &enemy_query,
+                &player_bullet_query,
+                &enemy_bullet_query,
+                &debris_query,
+            );
 
             handle_collision_and_despawn(
                 *entity1,
@@ -212,6 +267,8 @@ pub fn handle_collisions(
                 &mut commands,
                 &asset_server,
                 &mut despawned_entities,
+                &mut game_values,
+                &mut next_state,
             );
         }
     }
